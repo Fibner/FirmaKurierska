@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>Panel główny</title>
+
+<style>
+    body { font-family: Arial, sans-serif; background: #f2f2f2; margin: 0; padding: 0; font-size: 14px; }
+    .container { width: 1200px; margin: 20px auto; background: #fff; border: 1px solid #aaa; padding: 15px; }
+    header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 15px; }
+    header h1 { font-size: 20px; font-weight: normal; }
+    nav { margin-bottom: 15px; }
+    nav button { margin-right: 5px; padding: 5px 10px; border: 1px solid #888; background: #e0e0e0; cursor: pointer; }
+    nav button.active { background: #ccc; font-weight: bold; }
+    section { display: none; }
+    section.active { display: block; }
+    h2 { font-size: 16px; margin-bottom: 10px; font-weight: bold; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ccc; padding: 6px; text-align: left; vertical-align: top; }
+    th { background: #eee; }
+    .stats { display: flex; gap: 20px; margin-bottom: 15px; }
+    .stat { border: 1px solid #ccc; padding: 10px; width: 220px; }
+    button { padding: 5px 10px; border: 1px solid #666; background: #ddd; cursor: pointer; }
+    .row { display:flex; gap:10px; flex-wrap: wrap; }
+    .row > div { flex: 1; min-width: 220px; }
+    input, select { width: 100%; padding: 6px; box-sizing: border-box; border: 1px solid #999; font-size: 14px; }
+    .hint { color:#555; font-size: 12px; margin-top: 4px; }
+    .error { color: #a00000; }
+    .ok { color: #006400; }
+    #forecastChart { border: 1px solid #ccc; width: 100%; height: 260px; }
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<header>
+    <h1>System kurierski – panel</h1>
+    <div>
+        <button onclick="goCourierPanel()">Panel kuriera</button>
+        <button onclick="logout()">Wyloguj</button>
+    </div>
+</header>
+
+<nav>
+    <button class="active" onclick="showTab('dashboard', this)">Dashboard</button>
+    <button onclick="showTab('orders', this)">Zamówienia</button>
+    <button onclick="showTab('newOrder', this)">Nowe zamówienie</button>
+    <button onclick="showTab('analytics', this)">Analityka</button>
+</nav>
+
+<section id="dashboard" class="active">
+    <h2>Podsumowanie (dziś)</h2>
+    <div class="stats">
+        <div class="stat">Zamówienia: <strong id="totalOrders">0</strong></div>
+        <div class="stat">Dostarczone: <strong id="deliveredOrders">0</strong></div>
+        <div class="stat">Przychód: <strong id="totalRevenue">0 PLN</strong></div>
+        <div class="stat">Śr. czas dostawy: <strong id="avgDelivery">-</strong></div>
+    </div>
+
+    <h2>Ostatnie zamówienia</h2>
+    <table id="recentOrdersTable">
+        <thead>
+            <tr>
+                <th>Nr</th>
+                <th>Nadawca</th>
+                <th>Odbiorca</th>
+                <th>Status</th>
+                <th>Data</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</section>
+
+<section id="orders">
+    <h2>Lista zamówień (z filtrami)</h2>
+
+    <div class="row">
+        <div>
+            <label>Status</label>
+            <select id="filterStatus">
+                <option value="">(wszystkie)</option>
+                <option value="pending">pending</option>
+                <option value="assigned">assigned</option>
+                <option value="picked_up">picked_up</option>
+                <option value="in_transit">in_transit</option>
+                <option value="delivered">delivered</option>
+                <option value="failed_delivery">failed_delivery</option>
+                <option value="cancelled">cancelled</option>
+            </select>
+        </div>
+        <div>
+            <label>Klient (nadawca/odbiorca)</label>
+            <input id="filterClient" placeholder="np. Kowalski">
+        </div>
+        <div>
+            <label>Kurier (nazwa)</label>
+            <input id="filterCourier" placeholder="np. Jan Nowak">
+        </div>
+        <div>
+            <label>Od</label>
+            <input id="filterStartDate" type="date">
+        </div>
+        <div>
+            <label>Do</label>
+            <input id="filterEndDate" type="date">
+        </div>
+        <div style="display:flex; align-items:end; gap:8px;">
+            <button onclick="loadOrders()">Filtruj</button>
+            <button onclick="exportOrdersCsv()">Eksport CSV</button>
+        </div>
+    </div>
+
+    <table id="ordersTable">
+        <thead>
+            <tr>
+                <th>Nr</th>
+                <th>Nadawca</th>
+                <th>Odbiorca</th>
+                <th>Status</th>
+                <th>Kurier</th>
+                <th>Data</th>
+                <th>Akcje</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <div id="orderMsg" class="hint"></div>
+</section>
+
+<section id="newOrder">
+    <h2>Nowe zamówienie (zgodne z opisem PDF)</h2>
+
+    <div class="row">
+        <div>
+            <label>Nadawca</label>
+            <input id="senderName" placeholder="Imię i nazwisko / firma">
+        </div>
+        <div>
+            <label>Adres nadawcy</label>
+            <input id="senderAddress" placeholder="Ulica, nr, miasto">
+        </div>
+        <div>
+            <label>Telefon nadawcy (opcjonalnie)</label>
+            <input id="senderPhone" placeholder="+48 ...">
+        </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+        <div>
+            <label>Odbiorca</label>
+            <input id="recipientName" placeholder="Imię i nazwisko / firma">
+        </div>
+        <div>
+            <label>Adres odbiorcy</label>
+            <input id="recipientAddress" placeholder="Ulica, nr, miasto">
+        </div>
+        <div>
+            <label>Telefon odbiorcy (opcjonalnie)</label>
+            <input id="recipientPhone" placeholder="+48 ...">
+        </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+        <div>
+            <label>Waga (kg)</label>
+            <input id="weight" type="number" step="0.01" min="0.01" placeholder="np. 2.5">
+        </div>
+        <div>
+            <label>Wymiary (cm)</label>
+            <div class="row" style="gap:6px;">
+                <div><input id="dimL" type="number" min="0" placeholder="dł."></div>
+                <div><input id="dimW" type="number" min="0" placeholder="szer."></div>
+                <div><input id="dimH" type="number" min="0" placeholder="wys."></div>
+            </div>
+            <div class="hint">PDF wymaga rozmiaru przesyłki – tu realizujemy wymiary.</div>
+        </div>
+        <div>
+            <label>Rodzaj dostawy</label>
+            <select id="deliveryType">
+                <option value="standard">standard</option>
+                <option value="express">express</option>
+                <option value="overnight">overnight</option>
+            </select>
+            <div class="hint">Wpływa na wycenę faktury.</div>
+        </div>
+        <div>
+            <label>Wartość zadeklarowana (PLN)</label>
+            <input id="declaredValue" type="number" step="0.01" min="0" placeholder="np. 500">
+        </div>
+    </div>
+
+    <p style="margin-top:10px;">
+        <button onclick="createOrder()">Utwórz</button>
+    </p>
+    <div id="createOrderMsg"></div>
+</section>
+
+<section id="analytics">
+    <h2>Analityka</h2>
+    <p>Zakres dat (KPI + TOP kurierzy):</p>
+    <div class="row">
+        <div><input type="date" id="startDate"></div>
+        <div><input type="date" id="endDate"></div>
+        <div style="display:flex; gap:8px;">
+            <button onclick="loadAnalytics()">Pobierz</button>
+            <button onclick="loadForecast()">Prognoza 7 dni</button>
+        </div>
+    </div>
+
+    <div id="analyticsResults" style="margin-top:10px;"></div>
+
+    <h2 style="margin-top:20px;">Prognoza popytu (7 dni)</h2>
+    <canvas id="forecastChart" width="1100" height="260"></canvas>
+</section>
+
+</div>
+
+<script>
+const API_URL = 'http://localhost:3000/api';
+const authToken = localStorage.getItem('token');
+const TENANT_ID = localStorage.getItem('tenantId');
+
+if (!authToken || !TENANT_ID) location.href = 'login.html';
+
+const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${authToken}`,
+    'X-Tenant-ID': TENANT_ID
+};
+
+function showTab(id, btn) {
+    document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    btn.classList.add('active');
+}
+
+function logout() {
+    localStorage.clear();
+    location.href = 'login.html';
+}
+
+function goCourierPanel() {
+    location.href = 'courier.html';
+}
+
+async function loadDashboard() {
+    const today = new Date().toISOString().split('T')[0];
+    const tomorow = new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0];
+
+    const res = await fetch(`${API_URL}/analytics/kpi?startDate=${today}&endDate=${tomorow}`, { headers });
+    const data = await res.json();
+
+    totalOrders.textContent = data.orders.total;
+    deliveredOrders.textContent = data.orders.delivered;
+    totalRevenue.textContent = (data.revenue.total_revenue || 0) + ' PLN';
+    avgDelivery.textContent = data.orders.avg_delivery_hours ? (Number(data.orders.avg_delivery_hours).toFixed(1) + ' h') : '-';
+
+    loadRecentOrders();
+}
+
+async function loadRecentOrders() {
+    const res = await fetch(`${API_URL}/orders?limit=5`, { headers });
+    const orders = await res.json();
+    recentOrdersTable.querySelector('tbody').innerHTML =
+        orders.map(o => `
+            <tr>
+                <td>${o.order_number}</td>
+                <td>${o.sender_name}</td>
+                <td>${o.recipient_name}</td>
+                <td>${o.status}</td>
+                <td>${new Date(o.created_at).toLocaleDateString()}</td>
+            </tr>
+        `).join('');
+}
+
+function buildOrdersQuery() {
+    const params = new URLSearchParams();
+    const status = document.getElementById('filterStatus').value;
+    const client = document.getElementById('filterClient').value;
+    const courier = document.getElementById('filterCourier').value;
+    const startDate = document.getElementById('filterStartDate').value;
+    const endDate = document.getElementById('filterEndDate').value;
+
+    if (status) params.set('status', status);
+    if (client) params.set('client', client);
+    if (courier) params.set('courier', courier);
+    if (startDate) params.set('startDate', startDate);
+    if (endDate) params.set('endDate', endDate);
+
+    return params.toString();
+}
+
+async function loadOrders() {
+    const query = buildOrdersQuery();
+    const res = await fetch(`${API_URL}/orders?${query}`, { headers });
+    const orders = await res.json();
+
+    ordersTable.querySelector('tbody').innerHTML =
+        orders.map(o => `
+            <tr>
+                <td>${o.order_number}</td>
+                <td>${o.sender_name}</td>
+                <td>${o.recipient_name}</td>
+                <td><strong>${o.status}</strong></td>
+                <td>${o.courier_name || '-'}</td>
+                <td>${new Date(o.created_at).toLocaleString()}</td>
+                <td>
+                    <div style="display:flex; gap:6px; flex-wrap: wrap;">
+                        <select id="st_${o.id}">
+                            <option value="picked_up">picked_up</option>
+                            <option value="in_transit">in_transit</option>
+                            <option value="delivered">delivered</option>
+                            <option value="failed_delivery">failed_delivery</option>
+                            <option value="cancelled">cancelled</option>
+                        </select>
+                        <button onclick="updateStatus(${o.id})">Zmień status</button>
+                        <button onclick="showHistory(${o.id})">Historia</button>
+                        <button onclick="generateInvoice(${o.id})">Faktura</button>
+                    </div>
+                    <div id="msg_${o.id}" class="hint"></div>
+                </td>
+            </tr>
+        `).join('');
+
+    orderMsg.textContent = `Załadowano: ${orders.length} rekordów`;
+}
+
+async function updateStatus(orderId) {
+    const status = document.getElementById(`st_${orderId}`).value;
+    const msg = document.getElementById(`msg_${orderId}`);
+    msg.textContent = '...';
+
+    const res = await fetch(`${API_URL}/orders/${orderId}/status`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ status })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+        msg.innerHTML = `<span class="error">${data.error || 'Błąd'}</span>`;
+        return;
+    }
+    msg.innerHTML = `<span class="ok">OK</span>`;
+    loadOrders();
+    loadDashboard();
+}
+
+async function showHistory(orderId) {
+    const msg = document.getElementById(`msg_${orderId}`);
+    msg.textContent = 'Pobieranie historii...';
+
+    const res = await fetch(`${API_URL}/orders/${orderId}/history`, { headers });
+    const hist = await res.json();
+    if (!res.ok) {
+        msg.innerHTML = `<span class="error">${hist.error || 'Błąd'}</span>`;
+        return;
+    }
+    const lines = hist.map(h => `${new Date(h.changed_at).toLocaleString()} – ${h.status}${h.note ? ' ('+h.note+')' : ''}`).join('<br>');
+    msg.innerHTML = `<div style="max-height:120px; overflow:auto; border:1px solid #ccc; padding:6px; background:#fafafa;">${lines || '(brak)'}</div>`;
+}
+
+async function generateInvoice(orderId) {
+    const msg = document.getElementById(`msg_${orderId}`);
+    msg.textContent = 'Generowanie faktury...';
+
+    const res = await fetch(`${API_URL}/invoices/generate`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ orderId })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+        msg.innerHTML = `<span class="error">${data.error || 'Błąd'}</span>`;
+        return;
+    }
+    msg.innerHTML = `<span class="ok">Faktura ${data.invoiceNumber}: ${data.totalAmount.toFixed(2)} PLN</span>`;
+    loadDashboard();
+}
+
+async function exportOrdersCsv() {
+    const startDate = document.getElementById('filterStartDate').value;
+    const endDate = document.getElementById('filterEndDate').value;
+
+    const url = new URL(`${API_URL}/reports/orders.csv`);
+    if (startDate) url.searchParams.set('startDate', startDate);
+    if (endDate) url.searchParams.set('endDate', endDate);
+
+    const res = await fetch(url.toString(), { headers });
+    if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || 'Błąd eksportu CSV');
+        return;
+    }
+
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'orders.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+}
+
+async function createOrder() {
+    const msg = document.getElementById('createOrderMsg');
+    msg.textContent = '';
+
+    const payload = {
+        sender: {
+            name: document.getElementById('senderName').value,
+            address: document.getElementById('senderAddress').value,
+            phone: document.getElementById('senderPhone').value || null
+        },
+        recipient: {
+            name: document.getElementById('recipientName').value,
+            address: document.getElementById('recipientAddress').value,
+            phone: document.getElementById('recipientPhone').value || null
+        },
+        packageDetails: {
+            weight: Number(document.getElementById('weight').value),
+            dimensions: {
+                length: Number(document.getElementById('dimL').value || 0),
+                width: Number(document.getElementById('dimW').value || 0),
+                height: Number(document.getElementById('dimH').value || 0)
+            },
+            value: Number(document.getElementById('declaredValue').value || 0)
+        },
+        deliveryType: document.getElementById('deliveryType').value
+    };
+
+    const res = await fetch(`${API_URL}/orders`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+        const details = (data.details && Array.isArray(data.details)) ? ('<ul>' + data.details.map(d => `<li>${d}</li>`).join('') + '</ul>') : '';
+        msg.innerHTML = `<div class="error"><strong>${data.error || 'Błąd'}</strong>${details}</div>`;
+        return;
+    }
+
+    msg.innerHTML = `<div class="ok">Utworzono ${data.orderNumber} (status: ${data.status}${data.courierName ? ', kurier: '+data.courierName : ''})</div>`;
+    loadOrders();
+    loadDashboard();
+    showTab('orders', document.querySelectorAll('nav button')[1]);
+}
+
+async function loadAnalytics() {
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+
+    if (!startDate || !endDate) {
+        analyticsResults.innerHTML = '<div class="error">Uzupełnij daty</div>';
+        return;
+    }
+
+    const res = await fetch(`${API_URL}/analytics/kpi?startDate=${startDate}&endDate=${endDate}`, { headers });
+    const data = await res.json();
+
+    if (!res.ok) {
+        analyticsResults.innerHTML = `<div class="error">${data.error || 'Błąd'}</div>`;
+        return;
+    }
+
+    const couriers = (data.topCouriers || []).map(c => `<tr><td>${c.name}</td><td>${c.deliveries}</td><td>${c.rating}</td></tr>`).join('');
+    analyticsResults.innerHTML = `
+        <div class="stat" style="width:auto;">
+            <div><strong>KPI</strong></div>
+            <div>Zamówienia: ${data.orders.total}</div>
+            <div>Dostarczone: ${data.orders.delivered}</div>
+            <div>Anulowane: ${data.orders.cancelled}</div>
+            <div>Śr. czas dostawy: ${data.orders.avg_delivery_hours ? Number(data.orders.avg_delivery_hours).toFixed(1) + ' h' : '-'}</div>
+            <div>Przychód: ${(data.revenue.total_revenue || 0)} PLN</div>
+        </div>
+
+        <h2 style="margin-top:10px;">TOP kurierzy</h2>
+        <table>
+            <thead><tr><th>Kurier</th><th>Dostawy</th><th>Rating</th></tr></thead>
+            <tbody>${couriers || ''}</tbody>
+        </table>
+    `;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const now = new Date();
+    const end = now.toISOString().split('T')[0];
+    const start = new Date(now.getTime() - 6*86400000).toISOString().split('T')[0];
+    document.getElementById('startDate').value = start;
+    document.getElementById('endDate').value = end;
+
+    loadDashboard();
+    loadOrders();
+});
+</script>
+
+</body>
+</html>

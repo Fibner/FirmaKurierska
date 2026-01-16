@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>Panel kuriera</title>
+<style>
+  body { font-family: Arial, sans-serif; background:#f2f2f2; margin:0; }
+  .container { width: 1100px; margin: 20px auto; background:#fff; border:1px solid #aaa; padding:15px; }
+  header { display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #ccc; padding-bottom:10px; margin-bottom:15px; }
+  table { width:100%; border-collapse:collapse; }
+  th,td { border:1px solid #ccc; padding:6px; text-align:left; }
+  th { background:#eee; }
+  button { padding:5px 10px; border:1px solid #666; background:#ddd; cursor:pointer; }
+  select { padding:5px; border:1px solid #999; }
+  .ok { color:#006400; }
+  .error { color:#a00000; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Panel kuriera</h1>
+    <div>
+      <button onclick="goBack()">Powrót</button>
+      <button onclick="logout()">Wyloguj</button>
+    </div>
+  </header>
+
+  <div style="display:flex; gap:10px; align-items:end; flex-wrap:wrap;">
+    <div>
+      <label>Status</label><br>
+      <select id="statusFilter">
+        <option value="assigned">assigned</option>
+        <option value="picked_up">picked_up</option>
+        <option value="in_transit">in_transit</option>
+        <option value="">(wszystkie)</option>
+      </select>
+    </div>
+    <div>
+      <button onclick="load()">Odśwież</button>
+    </div>
+  </div>
+
+  <table style="margin-top:10px;">
+    <thead>
+      <tr>
+        <th>Nr</th>
+        <th>Nadawca</th>
+        <th>Odbiorca</th>
+        <th>Status</th>
+        <th>Data</th>
+        <th>Akcja</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+
+</div>
+
+<script>
+const API_URL = 'http://localhost:3000/api';
+const authToken = localStorage.getItem('token');
+const TENANT_ID = localStorage.getItem('tenantId');
+
+if (!authToken || !TENANT_ID) location.href = 'login.html';
+
+const headers = {
+  'Content-Type': 'application/json',
+  'Authorization': `Bearer ${authToken}`,
+  'X-Tenant-ID': TENANT_ID
+};
+
+function logout(){ localStorage.clear(); location.href='login.html'; }
+function goBack(){ location.href='dashboard.html'; }
+
+async function load(){
+  const st = document.getElementById('statusFilter').value;
+  const url = st ? `${API_URL}/orders?status=${encodeURIComponent(st)}&limit=100` : `${API_URL}/orders?limit=100`;
+
+  const res = await fetch(url, { headers });
+  const orders = await res.json();
+
+  tbody.innerHTML = (orders || []).map(o => `
+    <tr>
+      <td>${o.order_number}</td>
+      <td>${o.sender_name}</td>
+      <td>${o.recipient_name}</td>
+      <td><strong>${o.status}</strong></td>
+      <td>${new Date(o.created_at).toLocaleString()}</td>
+      <td>
+        <select id="st_${o.id}">
+          <option value="picked_up">picked_up</option>
+          <option value="in_transit">in_transit</option>
+          <option value="delivered">delivered</option>
+          <option value="failed_delivery">failed_delivery</option>
+        </select>
+        <button onclick="setStatus(${o.id})">Zapisz</button>
+        <div id="msg_${o.id}" class="hint"></div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function setStatus(orderId){
+  const status = document.getElementById(`st_${orderId}`).value;
+  const msg = document.getElementById(`msg_${orderId}`);
+  msg.textContent = '...';
+
+  const res = await fetch(`${API_URL}/orders/${orderId}/status`, {
+    method:'PATCH',
+    headers,
+    body: JSON.stringify({ status })
+  });
+  const data = await res.json();
+  if (!res.ok){
+    msg.innerHTML = `<span class="error">${data.error || 'Błąd'}</span>`;
+    return;
+  }
+  msg.innerHTML = `<span class="ok">OK</span>`;
+  load();
+}
+
+document.addEventListener('DOMContentLoaded', load);
+</script>
+
+</body>
+</html>

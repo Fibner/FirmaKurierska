@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>Logowanie</title>
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #f0f0f0;
+        margin: 0;
+        padding: 0;
+    }
+
+    .container {
+        width: 300px;
+        margin: 120px auto;
+        padding: 16px;
+        border: 1px solid #999;
+        background: #fff;
+    }
+
+    h2 {
+        margin: 0 0 16px 0;
+        font-size: 18px;
+        font-weight: normal;
+    }
+
+    label {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 14px;
+    }
+
+    input {
+        width: 100%;
+        padding: 6px;
+        margin-bottom: 12px;
+        box-sizing: border-box;
+        border: 1px solid #999;
+        font-size: 14px;
+    }
+
+    button {
+        padding: 6px 12px;
+        border: 1px solid #666;
+        background: #e0e0e0;
+        cursor: pointer;
+        font-size: 14px;
+    }
+
+    button:hover {
+        background: #d0d0d0;
+    }
+
+    .error {
+        margin-top: 10px;
+        color: #b00000;
+        font-size: 13px;
+        display: none;
+    }
+</style>
+</head>
+
+<body>
+
+<div class="container">
+    <h2>Logowanie</h2>
+
+    <label>Email</label>
+    <input type="email" id="email">
+
+    <label>Hasło</label>
+    <input type="password" id="password">
+
+    <label>ID firmy</label>
+    <input type="text" id="tenantId">
+
+    <button onclick="login()">Zaloguj</button>
+
+    <div id="error" class="error"></div>
+</div>
+
+<script>
+const API_URL = 'http://localhost:3000/api';
+
+async function login() {
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    const tenantId = document.getElementById('tenantId').value;
+    const errorBox = document.getElementById('error');
+
+    errorBox.style.display = 'none';
+
+    if (!email || !password || !tenantId) {
+        showError('Uzupełnij wszystkie pola');
+        return;
+    }
+
+    try {
+        const response = await fetch(API_URL + '/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password, tenantId })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            showError(data.error || 'Błąd logowania');
+            return;
+        }
+
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('tenantId', tenantId);
+
+        window.location.href = (data.user && data.user.role === 'courier') ? 'courier.html' : 'dashboard.html';
+
+    } catch (err) {
+        showError('Nie można połączyć się z serwerem');
+    }
+}
+
+function showError(msg) {
+    const box = document.getElementById('error');
+    box.textContent = msg;
+    box.style.display = 'block';
+}
+</script>
+
+</body>
+</html>
